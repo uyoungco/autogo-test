@@ -1,0 +1,73 @@
+{
+  "阿斯加德城": {
+    "regionType": "map_name",
+    "text": "아스가르드성",
+    "sim": 0.8
+  },
+  "乌特加尔特要骞": {
+    "regionType": "map_name",
+    "text": "무트가르트새",
+    "sim": 0.8
+  },
+  "格拉西尔森林": {
+    "regionType": "map_name",
+    "text": "글라시르술",
+    "sim": 0.8
+  },
+  "冰霜之丘": {
+    "regionType": "map_name",
+    "text": "비프로스트의언덕",
+    "sim": 0.8
+  },
+  "埃吉尔的悬崖": {
+    "regionType": "map_name",
+    "text": "에기르의절벽",
+    "sim": 0.8
+  },
+  "伊门的山脊": {
+    "regionType": "map_name",
+    "text": "이둔의골짜기",
+    "sim": 0.8
+  },
+  "巨人的坟募": {
+    "regionType": "map_name",
+    "text": "트들의무덤",
+    "sim": 0.8
+  },
+  "赫尔莫德的岔路口": {
+    "regionType": "map_name",
+    "text": "헤르모드의갈림길",
+    "sim": 0.8
+  },
+  "世界树": {
+    "regionType": "map_name",
+    "text": "세계수의협곡",
+    "sim": 0.8
+  },
+  "巨魔遗迹": {
+    "regionType": "map_name",
+    "text": "트론의유적하층",
+    "sim": 0.8
+  },
+  "东迷宫": {
+    "regionType": "map_name",
+    "text": "카라의미뭉",
+    "sim": 0.8
+  },
+  "西迷宫": {
+    "regionType": "map_name",
+    "text": "카라의미뭉",
+    "sim": 0.8
+  },
+  "混沌神殿": {
+    "regionType": "map_name",
+    "text": "혼돈의신전",
+    "sim": 0.8
+  },
+  "福尔克房": {
+    "regionType": "map_name",
+    "text": "폴크방",
+    "sim": 0.8
+  }
+}
+

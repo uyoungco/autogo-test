@@ -1,0 +1,21 @@
+{
+  "app_packages": {
+    "kit": "fun.kitsunebi.kitsunebi4android",
+    "ymir": "com.wemade.ymir",
+    "google": "com.google.android.gms"
+  },
+  "hot_update": {
+    "version": "1.0.2",
+    "askKey": "xxxx"
+  },
+  "ocr": {
+    "license_key": "T4N0M1WICKJ7SVQLQBIDDJPV9XLELA3P|9sY8dIhUtjU7vHY86dQAsIcK"
+  },
+  "sls": {
+    "access_key_id": "xxxxxx",
+    "access_key_secret": "xxxxx",
+    "endpoint": "cn-beijing.log.aliyuncs.com",
+    "project": "ymir",
+    "logstore": "s1"
+  }
+}

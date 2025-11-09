@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background-color: #f7f7f7;
+      }
+
+      .login-container {
+        width: 90%;
+        max-width: 300px;
+        padding: 20px;
+        background-color: #fff;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        border-radius: 5px;
+        min-height: auto;
+      }
+
+      .form-field {
+        display: flex;
+        align-items: center;
+        margin: 10px 0;
+      }
+
+      .form-field label {
+        width: 50px; /* Reduced label width and margin to minimize left spacing */
+        text-align: right;
+        margin-right: 5px;
+        font-size: 14px;
+        color: #333;
+      }
+
+      input[type="text"],
+      input[type="password"] {
+        flex: 1;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        ime-mode: disabled;
+        -webkit-ime-mode: disabled;
+        -moz-ime-mode: disabled;
+        -ms-ime-mode: disabled;
+      }
+
+      input[type="submit"] {
+        width: 100%;
+        padding: 10px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+
+      input[type="submit"]:hover {
+        background-color: #0056b3;
+      }
+
+      .lb {
+        text-align: center;
+        font-size: 0.84em;
+        margin: 8px 0;
+        font-weight: bold;
+        color: #333;
+      }
+
+      /* 添加了美化的暂停/继续按钮样式 */
+      .countdown-container {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 10px 0;
+      }
+
+      .countdown-display {
+        display: flex;
+        align-items: center;
+      }
+
+      .countdown-number {
+        margin-right: 10px;
+        font-weight: bold;
+        color: #007bff;
+        font-size: 16px;
+        min-width: 25px;
+        text-align: center;
+      }
+
+      .pause-btn {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+        color: white;
+        border: none;
+        border-radius: 6px;
+        padding: 8px 16px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 4px rgba(0, 123, 255, 0.2);
+        min-width: 60px;
+        text-align: center;
+      }
+
+      .pause-btn:hover {
+        background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+        box-shadow: 0 4px 8px rgba(0, 123, 255, 0.3);
+        transform: translateY(-1px);
+      }
+
+      .pause-btn:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(0, 123, 255, 0.2);
+      }
+
+      .pause-btn:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+      }
+
+      /* 暂停状态的按钮样式 */
+      .pause-btn.paused {
+        background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
+        box-shadow: 0 2px 4px rgba(40, 167, 69, 0.2);
+      }
+
+      .pause-btn.paused:hover {
+        background: linear-gradient(135deg, #1e7e34 0%, #155724 100%);
+        box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+      }
+
+      /* 页签样式 */
+      .tab-container {
+        margin-bottom: 10px;
+      }
+
+      .tab-nav {
+        display: flex;
+        border-bottom: 2px solid #f0f0f0;
+        margin-bottom: 10px;
+      }
+
+      .tab-button {
+        background: none;
+        border: none;
+        padding: 12px 20px;
+        cursor: pointer;
+        font-size: 9.8px;
+        font-weight: 500;
+        color: #666;
+        border-bottom: 2px solid transparent;
+        transition: all 0.3s ease;
+        position: relative;
+      }
+
+      .tab-button:hover {
+        color: #007bff;
+        background-color: #f8f9fa;
+      }
+
+      .tab-button.active {
+        color: #007bff;
+        border-bottom-color: #007bff;
+        background-color: #f8f9fa;
+      }
+
+      .tab-content {
+        display: none;
+      }
+
+      .tab-content.active {
+        display: block;
+      }
+    </style>
+</head>
+
+<body>
+<div class="login-container">
+    <p class="lb">AutoRun-尤弥尔传奇韩服</p>
+
+    <!-- 页签导航 -->
+    <div class="tab-container">
+        <div class="tab-nav">
+            <button type="button" class="tab-button active" data-tab="home">首页</button>
+            <button type="button" class="tab-button" data-tab="config">其他配置</button>
+        </div>
+
+        <!-- 首页内容 -->
+        <div class="tab-content active" id="home">
+            <form id="myForm">
+                <!-- Modified form structure to put labels and inputs on same line, changed 用户名 to 账号 -->
+                <div class="form-field">
+                    <label for="username">账号:</label>
+                    <!-- Added IME disable attributes -->
+                    <input type="text" id="username" name="username" pattern="[A-Za-z0-9]*" title="只能输入字母和数字"
+                           inputmode="latin" autocomplete="off" spellcheck="false" required>
+                </div>
+                <div class="form-field">
+                    <label for="password">密码:</label>
+                    <!-- Added IME disable attributes -->
+                    <input type="password" id="password" name="password" pattern="[A-Za-z0-9]*" title="只能输入字母和数字"
+                           inputmode="latin" autocomplete="off" spellcheck="false" required>
+                </div>
+                <div class="form-field">
+                    <label for="windowId">窗口:</label>
+                    <!-- Added IME disable attributes -->
+                    <input type="text" id="windowId" name="windowId" pattern="[A-Za-z0-9]*" title="只能输入字母和数字"
+                           inputmode="latin" autocomplete="off" spellcheck="false" required>
+                </div>
+                <!-- 重构了倒计时和按钮的布局结构 -->
+                <div class="countdown-container">
+                    <div style="display: flex; align-items: center;">
+                        <input type="checkbox" id="isApple" name="isApple" style="margin-right: 8px;">
+                        <label for="isApple" style="font-size: 0.7em;">是否苹果账号</label>
+                    </div>
+                    <div class="countdown-display">
+                        <span style="margin-right: 5px; color: #666; font-size: 0.7em;">计时：</span>
+                        <span id="countdown" class="countdown-number">20</span>
+                    </div>
+                </div>
+                <!-- Added button container with cancel and login buttons -->
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" id="cancelBtn" style="flex: 1; padding: 10px; background-color: white; color: #333; border: 1px solid #ccc; border-radius: 5px; cursor: pointer;">取消</button>
+                    <input type="submit" value="登录" style="flex: 1; margin: 0;">
+                </div>
+            </form>
+        </div>
+
+        <!-- 其他配置内容 -->
+        <div class="tab-content" id="config">
+            <p style="color: #666; text-align: center; padding: 40px 0;">留空以后备用.</p>
+        </div>
+    </div>
+</div>
+
+<script>
+  // 倒计时相关变量
+  let countdownTimer = null;
+  let countdownValue = 20;
+  let isPaused = true; // 默认暂停
+
+  // 页面加载时自动填充所有已保存的数据
+  document.addEventListener("DOMContentLoaded", function () {
+    // 首先尝试从后端获取storages保存的数据
+    fetch('/getFormData')
+      .then(response => response.json())
+      .then(data => {
+        console.log('从后端获取到的数据:', data);
+
+        // 直接使用返回的数据填充表单
+        if (data.username) {
+          document.getElementById("username").value = data.username;
+        }
+        if (data.password) {
+          document.getElementById("password").value = data.password;
+        }
+        if (data.windowId) {
+          document.getElementById("windowId").value = data.windowId;
+        }
+        if (data.isApple === "true") {
+          document.getElementById("isApple").checked = true;
+        }
+
+        // 重置倒计时为20秒
+        countdownValue = 20;
+        document.getElementById("countdown").textContent = countdownValue;
+
+        // 检查表单状态并启动倒计时（如果所有字段都有值）
+        checkFormAndUpdateTimer();
+
+        console.log("页面加载完成，数据已自动填充");
+      })
+      .catch(error => {
+        console.log('无法获取后端保存的数据，使用localStorage数据:', error);
+        // 如果请求失败，则使用localStorage的数据
+        loadFromLocalStorage();
+
+        // 重置倒计时为20秒
+        countdownValue = 20;
+        document.getElementById("countdown").textContent = countdownValue;
+
+        // 检查表单状态并启动倒计时（如果所有字段都有值）
+        checkFormAndUpdateTimer();
+
+        console.log("页面加载完成，localStorage数据已填充");
+      });
+
+
+    // 为输入框添加监听器，当内容变化时检查是否可以启动倒计时
+    document.getElementById("username").addEventListener("input", checkFormAndUpdateTimer);
+    document.getElementById("password").addEventListener("input", checkFormAndUpdateTimer);
+    document.getElementById("windowId").addEventListener("input", checkFormAndUpdateTimer);
+
+    // 限制输入只能是字母和数字
+    function restrictToAlphanumeric(inputElement) {
+      inputElement.addEventListener("input", function(e) {
+        // 移除所有非字母数字字符
+        this.value = this.value.replace(/[^A-Za-z0-9]/g, '');
+      });
+
+      // 阻止输入法相关事件
+      inputElement.addEventListener("compositionstart", function(e) {
+        e.preventDefault();
+      });
+
+      inputElement.addEventListener("compositionupdate", function(e) {
+        e.preventDefault();
+      });
+
+      inputElement.addEventListener("compositionend", function(e) {
+        e.preventDefault();
+        // 清除任何可能的非字母数字字符
+        this.value = this.value.replace(/[^A-Za-z0-9]/g, '');
+      });
+    }
+
+    // 应用字母数字限制到所有三个输入框
+    restrictToAlphanumeric(document.getElementById("username"));
+    restrictToAlphanumeric(document.getElementById("password"));
+    restrictToAlphanumeric(document.getElementById("windowId"));
+  });
+
+  // 从localStorage加载数据的函数
+  function loadFromLocalStorage() {
+    const storedUsername = localStorage.getItem("username");
+    const storedPassword = localStorage.getItem("password");
+    const storedWindowId = localStorage.getItem("windowId");
+    const storedIsApple = localStorage.getItem("isApple");
+
+    if (storedUsername) {
+      document.getElementById("username").value = storedUsername;
+    }
+    if (storedPassword) {
+      document.getElementById("password").value = storedPassword;
+    }
+    if (storedWindowId) {
+      document.getElementById("windowId").value = storedWindowId;
+    }
+    if (storedIsApple === "true") {
+      document.getElementById("isApple").checked = true;
+    }
+  }
+
+  // 检查表单完整性并更新倒计时状态
+  function checkFormAndUpdateTimer() {
+    const username = document.getElementById("username").value.trim();
+    const password = document.getElementById("password").value.trim();
+    const windowId = document.getElementById("windowId").value.trim();
+
+    console.log(`检查表单: 用户名=${username}, 密码=${password ? '***' : ''}, 窗口=${windowId}`);
+
+    if (!username || !password || !windowId) {
+      // 有字段为空，暂停倒计时
+      console.log("有字段为空，暂停倒计时");
+      pauseCountdown();
+    } else {
+      // 所有必要字段都有值，启动倒计时
+      if (isPaused) {
+        console.log("所有字段都有值，启动倒计时");
+        startCountdown();
+      }
+    }
+  }
+
+  // 启动倒计时
+  function startCountdown() {
+    isPaused = false;
+
+    if (countdownTimer) {
+      clearInterval(countdownTimer);
+    }
+
+    countdownTimer = setInterval(function() {
+      countdownValue--;
+      document.getElementById("countdown").textContent = countdownValue;
+
+      if (countdownValue <= 0) {
+        clearInterval(countdownTimer);
+        console.log("倒计时结束，自动登录");
+        document.getElementById("myForm").dispatchEvent(new Event("submit"));
+      }
+    }, 1000);
+  }
+
+  // 暂停倒计时
+  function pauseCountdown() {
+    isPaused = true;
+    if (countdownTimer) {
+      clearInterval(countdownTimer);
+      countdownTimer = null;
+    }
+  }
+
+  // 页签切换功能
+  document.addEventListener("DOMContentLoaded", function() {
+    // 页签按钮点击事件
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(button => {
+      button.addEventListener('click', function() {
+        const targetTab = this.getAttribute('data-tab');
+
+        // 移除所有按钮的active类
+        tabButtons.forEach(btn => btn.classList.remove('active'));
+        // 添加当前按钮的active类
+        this.classList.add('active');
+
+        // 隐藏所有tab内容
+        tabContents.forEach(content => content.classList.remove('active'));
+        // 显示目标tab内容
+        document.getElementById(targetTab).classList.add('active');
+      });
+    });
+  });
+
+  document.getElementById('cancelBtn').addEventListener('click', function() {
+    fetch('/close')
+      .then(response => response.json())
+      .then(result => {
+        console.log('Cancel response:', result);
+      })
+      .catch(error => {
+        console.error('Cancel error:', error);
+      });
+  });
+
+  // 获取表单元素
+  const form = document.getElementById('myForm');
+
+  // 添加提交事件监听
+  form.addEventListener("submit", function (event) {
+    event.preventDefault(); // 阻止表单默认提交
+
+    // 暂停倒计时
+    if (countdownTimer) {
+      clearInterval(countdownTimer);
+    }
+
+    // 获取所有表单数据
+    const username = document.getElementById("username").value;
+    const password = document.getElementById("password").value;
+    const windowId = document.getElementById("windowId").value;
+    const isApple = document.getElementById("isApple").checked;
+
+    // 立即保存所有数据到localStorage（无论登录成功或失败）
+    localStorage.setItem("username", username);
+    localStorage.setItem("password", password);
+    localStorage.setItem("windowId", windowId);
+    localStorage.setItem("isApple", isApple.toString());
+
+    // 构造请求 URL
+    const query = `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&windowId=${encodeURIComponent(windowId)}&isApple=${encodeURIComponent(isApple)}`;
+
+    // 发送请求
+    fetch(`/login?${query}`)
+      .then(response => response.json())
+      .then(result => {
+        if (result.redirect) {
+          window.location.href = result.redirect; // 登录成功跳转到其他页面
+        } else if (result.message) {
+          alert(result.message); // 显示错误信息
+          // 重置倒计时
+          countdownValue = 20;
+          document.getElementById("countdown").textContent = countdownValue;
+          checkFormAndUpdateTimer(); // 重新检查是否可以启动倒计时
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('网络错误，请稍后再试');
+        // 重置倒计时
+        countdownValue = 20;
+        document.getElementById("countdown").textContent = countdownValue;
+        checkFormAndUpdateTimer(); // 重新检查是否可以启动倒计时
+      });
+  });
+</script>
+</body>
+
+</html>

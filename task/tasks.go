@@ -241,21 +241,21 @@ func 获取用户id() error {
 	core.RandomClickInArea(18, 22, 78, 81)
 	// core.RandomSleep(2000, 3000)
 
+	// 获取昵称编辑图标位置
 	x1, _, _ := core.OpenCV.WaitFor(956, 585, 1258, 611, "img/editicon.png", true, 1, 0.8, 2*time.Second, 60, "等待进入个人信息")
 	// 获取游戏昵称
-	// x1, _ := core.OpenCV.FindImage(956, 585, 1258, 611, "img/editicon.png", false, 1, 0.8)
-	fmt.Print("游戏昵称位置 x1:", x1, "\n")
-	results := core.OCR.DetectAllText(958, 587, x1, 610)
-	if len(results) != 0 {
-		fmt.Print("游戏昵称: ", results, "\n")
-		游戏昵称 = results[0]
+	// fmt.Print("游戏昵称位置 x1:", x1, "\n")
+	ganmeName := core.OCR.DetectAllText(958, 587, x1, 610)
+	if len(ganmeName) != 0 {
+		fmt.Print("游戏昵称: ", ganmeName, "\n")
+		游戏昵称 = ganmeName[0]
 	}
 
 	// 获取游戏id
-	userID := core.OCR.DetectAllText(990, 673, 1180, 692)
-	if len(userID) != 0 {
-		fmt.Print("获取用户id: ", userID, "\n")
-		账号id = userID[0]
+	gnameUserID := core.OCR.DetectAllText(990, 673, 1180, 692)
+	if len(gnameUserID) != 0 {
+		fmt.Print("获取用户id: ", gnameUserID, "\n")
+		账号id = gnameUserID[0]
 	}
 
 	if len(游戏昵称) == 0 || len(账号id) == 0 {
@@ -271,13 +271,11 @@ func 获取仓库物品价值() (string, error) {
 	for {
 		sceneName := scene.Identify()
 		core.Log("当前场景: " + sceneName)
-		if sceneName == "主界面" || sceneName == "主界面2" {
+		if sceneName == "界面仓库" {
 			break
 		}
-		core.Sleep(3000)
+		core.Sleep(5000)
 	}
-	// 点击仓库
-	core.RandomClickInArea(23, 647, 133, 682)
 
 	x1, y1, _ := core.OpenCV.WaitFor(947, 4, 1279, 44, "img/仓库-哈夫币-icon.png", false, 1, 0.8, 2*time.Second, 60, "等待获取哈夫币图标")
 	x2, _ := core.OpenCV.FindImage(947, 4, 1279, 44, "img/仓库-三角币-icon.png", false, 1, 0.8)
@@ -288,13 +286,13 @@ func 获取仓库物品价值() (string, error) {
 	x4 := x2
 	y4 := 42
 
-	jiazhi := core.OCR.DetectAllText(x3, y3, x4, y4)
-	if jiazhi != nil {
-		fmt.Print("仓库价值: ", jiazhi, "\n")
-		return jiazhi[0], nil
+	hafubuNum := core.OCR.DetectAllText(x3, y3, x4, y4)
+	if hafubuNum == nil {
+		return "", errors.New(" OCR获取仓库价值获取失败")
 	}
 
-	return "", errors.New(" OCR获取仓库价值获取失败")
+	fmt.Print("仓库价值: ", hafubuNum, "\n")
+	return hafubuNum[0], nil
 }
 
 // HTTP数据发送函数
@@ -339,7 +337,10 @@ func 数据收集发送() error {
 		}
 		// 点击返回
 		core.RandomClickInArea(16, 20, 45, 44)
-
+		// 随机延迟
+		core.RandomSleep(2000, 3000)
+		// 点击仓库
+		core.RandomClickInArea(23, 647, 133, 682)
 		// 获取仓库物品价值
 		warehouseValue, err := 获取仓库物品价值()
 		if err != nil {
@@ -356,8 +357,6 @@ func 数据收集发送() error {
 		if err != nil {
 			return err
 		}
-		// 点击返回
-		core.RandomClickInArea(16, 20, 45, 44)
 
 		// 发送HTTP请求
 		return 发送数据(账号id, 游戏昵称, warehouseValue)

@@ -17,7 +17,7 @@ func NewApiHandler() *ApiHandler {
 
 func (ctx *ApiHandler) LoginAndSetup(username, password, windowId string) bool {
 
-	fmt.Printf("username: %v, password: %v, windowId: %v", username, password, windowId)
+	fmt.Printf("username: %v, password: %v, windowId: %v \n", username, password, windowId)
 
 	if windowId == "" {
 		return true

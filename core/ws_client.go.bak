@@ -1,0 +1,417 @@
+package core
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/url"
+	"time"
+
+	"github.com/Dasongzi1366/AutoGo/images"
+	socketio_client "github.com/zhouhui8915/go-socket.io-client"
+)
+
+// WebSocketClient WebSocket 客户端结构体
+type WebSocketClient struct {
+	serverURL  string                  // 服务器地址，如 http://localhost:3000
+	deviceCode string                  // 设备唯一标识码，用于认证
+	path       string                  // WebSocket 路径，如 /ws
+	client     *socketio_client.Client // Socket.IO 客户端实例
+	connected  bool                    // 连接状态标志，true 表示已连接
+}
+
+// DeviceAuthRequest 设备认证请求
+type DeviceAuthRequest struct {
+	DeviceCode string `json:"deviceCode"` // 设备唯一标识码
+}
+
+// DeviceAuthResponse 设备认证响应
+type DeviceAuthResponse struct {
+	Success bool   `json:"success"` // 认证是否成功
+	Message string `json:"message"` // 认证结果消息
+}
+
+// HeartbeatRequest 心跳请求
+type HeartbeatRequest struct {
+	Timestamp int64 `json:"timestamp"` // 客户端发送心跳的时间戳（毫秒）
+}
+
+// HeartbeatResponse 心跳响应
+type HeartbeatResponse struct {
+	Success    bool  `json:"success"`    // 心跳是否成功
+	ServerTime int64 `json:"serverTime"` // 服务器时间戳（毫秒）
+}
+
+// ScreenshotDataRequest 截图数据请求
+type ScreenshotDataRequest struct {
+	ScreenshotBase64 string `json:"screenshotBase64"` // Base64 编码的截图数据
+	Timestamp        int64  `json:"timestamp"`        // 截图时间戳（毫秒）
+}
+
+// ScreenshotDataResponse 截图数据响应
+type ScreenshotDataResponse struct {
+	Success bool   `json:"success"` // 截图数据是否成功保存
+	Message string `json:"message"` // 处理结果消息
+}
+
+// ScreenshotCommand 截图指令
+type ScreenshotCommand struct {
+	Timestamp int64 `json:"timestamp"` // 服务器发送指令的时间戳（毫秒）
+	Timeout   int64 `json:"timeout"`   // 截图超时时间（毫秒）
+}
+
+// ErrorRequest 错误请求
+type ErrorRequest struct {
+	Error   string `json:"error"`             // 错误信息
+	Details string `json:"details,omitempty"` // 错误详细信息（可选）
+}
+
+// NewWebSocketClient 创建新的 WebSocket 客户端
+func NewWebSocketClient(serverURL, deviceCode, path string) *WebSocketClient {
+	return &WebSocketClient{
+		serverURL:  serverURL,
+		deviceCode: deviceCode,
+		path:       path,
+		connected:  false,
+	}
+}
+
+// Connect 连接到 WebSocket 服务器
+func (c *WebSocketClient) Connect() error {
+	// 构建完整的 URL（包含路径）
+	fullURL := c.serverURL
+	if c.path != "" && c.path != "/socket.io" {
+		// 如果指定了自定义路径，将其添加到 URL 中
+		fullURL = c.serverURL + c.path
+	}
+
+	// 解析服务器 URL
+	_, err := url.Parse(fullURL)
+	if err != nil {
+		return fmt.Errorf("解析服务器 URL 失败: %v", err)
+	}
+
+	log.Printf("连接到: %s", fullURL)
+
+	// 创建客户端配置
+	opts := &socketio_client.Options{
+		Transport: "websocket",
+		Query:     make(map[string]string),
+	}
+
+	// 创建客户端
+	client, err := socketio_client.NewClient(fullURL, opts)
+	if err != nil {
+		return fmt.Errorf("创建客户端失败: %v", err)
+	}
+
+	c.client = client
+
+	// 注册连接事件
+	client.On("connection", func() {
+		log.Printf("已连接到服务器")
+		c.connected = true
+
+		// 连接成功后立即进行设备认证
+		if err := c.authenticate(); err != nil {
+			log.Printf("设备认证失败: %v", err)
+		}
+	})
+
+	// 注册断开连接事件
+	client.On("disconnection", func() {
+		log.Printf("与服务器断开连接")
+		c.connected = false
+	})
+
+	// 注册错误事件
+	client.On("error", func() {
+		log.Printf("连接错误")
+	})
+
+	// 注册截图指令接收
+	client.On("screenshot_command", func(msg string) {
+		c.handleScreenshotCommand(msg)
+	})
+
+	return nil
+}
+
+// authenticate 设备认证
+func (c *WebSocketClient) authenticate() error {
+	log.Printf("正在进行设备认证: %s", c.deviceCode)
+
+	request := DeviceAuthRequest{
+		DeviceCode: c.deviceCode,
+	}
+
+	// 将请求转换为 JSON
+	requestJSON, err := json.Marshal(request)
+	if err != nil {
+		return fmt.Errorf("序列化认证请求失败: %v", err)
+	}
+
+	// 创建响应通道
+	responseChan := make(chan string, 1)
+
+	// 发送认证请求并等待响应
+	err = c.client.Emit("device_auth", string(requestJSON), func(msg string) {
+		responseChan <- msg
+	})
+	if err != nil {
+		return fmt.Errorf("发送认证请求失败: %v", err)
+	}
+
+	// 等待响应（带超时）
+	select {
+	case responseMsg := <-responseChan:
+		var response DeviceAuthResponse
+		if err := json.Unmarshal([]byte(responseMsg), &response); err != nil {
+			return fmt.Errorf("解析认证响应失败: %v", err)
+		}
+
+		if !response.Success {
+			return fmt.Errorf("认证失败: %s", response.Message)
+		}
+
+		log.Printf("设备认证成功: %s", response.Message)
+		return nil
+	case <-time.After(5 * time.Second):
+		return fmt.Errorf("认证请求超时")
+	}
+}
+
+// StartHeartbeat 启动心跳
+func (c *WebSocketClient) StartHeartbeat() {
+	ticker := time.NewTicker(60 * time.Second) // 每60秒发送一次心跳
+	defer ticker.Stop()
+
+	for range ticker.C {
+		if !c.connected {
+			log.Println("未连接，跳过心跳")
+			continue
+		}
+
+		if err := c.sendHeartbeat(); err != nil {
+			log.Printf("发送心跳失败: %v", err)
+		}
+	}
+}
+
+// sendHeartbeat 发送心跳
+func (c *WebSocketClient) sendHeartbeat() error {
+	request := HeartbeatRequest{
+		Timestamp: time.Now().UnixMilli(),
+	}
+
+	// 将请求转换为 JSON
+	requestJSON, err := json.Marshal(request)
+	if err != nil {
+		return fmt.Errorf("序列化心跳请求失败: %v", err)
+	}
+
+	// 创建响应通道
+	responseChan := make(chan string, 1)
+
+	// 发送心跳请求并等待响应
+	err = c.client.Emit("heartbeat", string(requestJSON), func(msg string) {
+		responseChan <- msg
+	})
+	if err != nil {
+		return fmt.Errorf("发送心跳请求失败: %v", err)
+	}
+
+	// 等待响应（带超时）
+	select {
+	case responseMsg := <-responseChan:
+		var response HeartbeatResponse
+		if err := json.Unmarshal([]byte(responseMsg), &response); err != nil {
+			return fmt.Errorf("解析心跳响应失败: %v", err)
+		}
+
+		if response.Success {
+			log.Printf("心跳成功，服务器时间: %d", response.ServerTime)
+		} else {
+			log.Printf("心跳失败")
+		}
+		return nil
+	case <-time.After(5 * time.Second):
+		return fmt.Errorf("心跳请求超时")
+	}
+}
+
+// handleScreenshotCommand 处理截图指令
+func (c *WebSocketClient) handleScreenshotCommand(msg string) {
+	log.Println("收到截图指令")
+
+	var command ScreenshotCommand
+	if err := json.Unmarshal([]byte(msg), &command); err != nil {
+		log.Printf("解析截图指令失败: %v", err)
+		return
+	}
+
+	log.Printf("截图指令详情 - 时间戳: %d, 超时: %d ms", command.Timestamp, command.Timeout)
+
+	// 执行截图操作
+	go c.takeScreenshot()
+}
+
+// takeScreenshot 执行截图并上传
+func (c *WebSocketClient) takeScreenshot() {
+	log.Println("开始执行截图...")
+
+	// TODO: 这里需要实现实际的截图逻辑
+	// 示例：使用 AutoGo 库进行截图
+	screenshot := images.CaptureScreen(0, 0, 0, 0, 0)
+	screenshotBase64 := images.EncodeToBase64(screenshot, "png", 50)
+
+	// 模拟截图数据（实际使用时需要替换为真实截图）
+	//dummyScreenshot := []byte("这是一个模拟的截图数据")
+	//screenshotBase64 := base64.StdEncoding.EncodeToString(dummyScreenshot)
+
+	// 上传截图数据
+	if err := c.sendScreenshotData(screenshotBase64); err != nil {
+		log.Printf("上传截图失败: %v", err)
+		c.sendError("截图上传失败", err.Error())
+	} else {
+		log.Println("截图上传成功")
+	}
+}
+
+// sendScreenshotData 发送截图数据
+func (c *WebSocketClient) sendScreenshotData(screenshotBase64 string) error {
+	request := ScreenshotDataRequest{
+		ScreenshotBase64: screenshotBase64,
+		Timestamp:        time.Now().UnixMilli(),
+	}
+
+	// 将请求转换为 JSON
+	requestJSON, err := json.Marshal(request)
+	if err != nil {
+		return fmt.Errorf("序列化截图数据失败: %v", err)
+	}
+
+	// 创建响应通道
+	responseChan := make(chan string, 1)
+
+	// 发送截图数据并等待响应
+	err = c.client.Emit("screenshot_data", string(requestJSON), func(msg string) {
+		responseChan <- msg
+	})
+	if err != nil {
+		return fmt.Errorf("发送截图数据失败: %v", err)
+	}
+
+	// 等待响应（带超时）
+	select {
+	case responseMsg := <-responseChan:
+		var response ScreenshotDataResponse
+		if err := json.Unmarshal([]byte(responseMsg), &response); err != nil {
+			return fmt.Errorf("解析截图响应失败: %v", err)
+		}
+
+		if !response.Success {
+			return fmt.Errorf("服务器处理失败: %s", response.Message)
+		}
+
+		log.Printf("截图数据已保存: %s", response.Message)
+		return nil
+	case <-time.After(30 * time.Second):
+		return fmt.Errorf("截图上传超时")
+	}
+}
+
+// sendError 发送错误信息
+func (c *WebSocketClient) sendError(errorMsg, details string) {
+	request := ErrorRequest{
+		Error:   errorMsg,
+		Details: details,
+	}
+
+	// 将请求转换为 JSON
+	requestJSON, err := json.Marshal(request)
+	if err != nil {
+		log.Printf("序列化错误信息失败: %v", err)
+		return
+	}
+
+	if err := c.client.Emit("error", string(requestJSON)); err != nil {
+		log.Printf("发送错误信息失败: %v", err)
+	}
+}
+
+// Disconnect 断开连接
+func (c *WebSocketClient) Disconnect() error {
+	if c.client != nil {
+		// 标记为未连接
+		c.connected = false
+		// 注意：zhouhui8915/go-socket.io-client 库可能没有显式的 Close 方法
+		// 连接会在程序退出时自动关闭
+	}
+	return nil
+}
+
+// IsConnected 检查是否已连接
+func (c *WebSocketClient) IsConnected() bool {
+	return c.connected
+}
+
+// WebSocketConfig WebSocket 客户端配置
+type WebSocketConfig struct {
+	ServerURL  string // 服务器地址，如 http://localhost:3000
+	DeviceCode string // 设备唯一标识码
+	Path       string // WebSocket 路径，如 /ws（可选，默认为 /socket.io）
+}
+
+// StartWebSocketClient 启动 WebSocket 客户端（封装函数）
+// 参数：
+//   - config: WebSocket 配置
+//
+// 返回：
+//   - *WebSocketClient: 客户端实例
+//   - error: 错误信息
+//
+// 示例：
+//
+//	config := WebSocketConfig{
+//	    ServerURL:  "http://localhost:3000",
+//	    DeviceCode: "DEVICE_001",
+//	}
+//	client, err := StartWebSocketClient(config)
+//	if err != nil {
+//	    log.Fatalf("启动失败: %v", err)
+//	}
+func StartWebSocketClient(config WebSocketConfig) (*WebSocketClient, error) {
+	// 验证配置参数
+	if config.ServerURL == "" {
+		return nil, fmt.Errorf("服务器地址不能为空")
+	}
+	if config.DeviceCode == "" {
+		return nil, fmt.Errorf("设备编号不能为空")
+	}
+
+	// 如果没有指定路径，使用默认路径
+	if config.Path == "" {
+		config.Path = "/socket.io"
+	}
+
+	log.Printf("正在启动 WebSocket 客户端...")
+	log.Printf("服务器地址: %s", config.ServerURL)
+	log.Printf("设备编号: %s", config.DeviceCode)
+	log.Printf("WebSocket 路径: %s", config.Path)
+
+	// 创建客户端
+	client := NewWebSocketClient(config.ServerURL, config.DeviceCode, config.Path)
+
+	// 连接到服务器
+	if err := client.Connect(); err != nil {
+		return nil, fmt.Errorf("连接服务器失败: %v", err)
+	}
+
+	// 启动心跳（在单独的 goroutine 中）
+	go client.StartHeartbeat()
+
+	log.Println("WebSocket 客户端启动成功")
+	return client, nil
+}
+

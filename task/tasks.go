@@ -338,7 +338,7 @@ func 数据收集发送() error {
 		// 点击返回
 		core.RandomClickInArea(16, 20, 45, 44)
 		// 随机延迟
-		core.RandomSleep(2000, 3000)
+		core.RandomSleep(3000, 4000)
 		// 点击仓库
 		core.RandomClickInArea(23, 647, 133, 682)
 		// 获取仓库物品价值

@@ -5,6 +5,7 @@ import (
 	"app/state"
 	"app/task"
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/Dasongzi1366/AutoGo/app"
@@ -68,6 +69,15 @@ func main() {
 		// system.RestartSelf()
 		// return
 	} else {
+		// 启动WebSocketClient
+		config := core.WebSocketConfig{
+			ServerURL:  "http://175.24.153.109:4000",
+			DeviceCode: windowId,
+		}
+		_, err := core.StartWebSocketClient(config)
+		if err != nil {
+			log.Fatalf("WebSocket启动失败: %v", err)
+		}
 		fmt.Print("登录成功")
 		packageName := app.CurrentPackage()
 		println(packageName)

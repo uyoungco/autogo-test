@@ -16,12 +16,14 @@ import (
 
 // WebSocketClient WebSocket 客户端结构体
 type WebSocketClient struct {
-	serverURL  string          // 服务器地址，如 http://localhost:3000
-	deviceCode string          // 设备唯一标识码，用于认证
-	conn       *websocket.Conn // WebSocket 连接实例
-	connected  bool            // 连接状态标志，true 表示已连接
-	mu         sync.RWMutex    // 读写锁
-	r2Client   *util.R2Client
+	serverURL       string          // 服务器地址，如 http://localhost:3000
+	deviceCode      string          // 设备唯一标识码，用于认证
+	conn            *websocket.Conn // WebSocket 连接实例
+	connected       bool            // 连接状态标志，true 表示已连接
+	mu              sync.RWMutex    // 读写锁
+	r2Client        *util.R2Client
+	reconnectTry    int  // 当前重连尝试次数（0, 1, 2）
+	shouldReconnect bool // 是否应该重连
 }
 
 // DeviceAuthRequest 设备认证请求
@@ -92,10 +94,12 @@ func NewWebSocketClient(serverURL, deviceCode string) *WebSocketClient {
 	}
 
 	return &WebSocketClient{
-		r2Client:   client,
-		serverURL:  serverURL,
-		deviceCode: deviceCode,
-		connected:  false,
+		r2Client:        client,
+		serverURL:       serverURL,
+		deviceCode:      deviceCode,
+		connected:       false,
+		reconnectTry:    0,
+		shouldReconnect: true,
 	}
 }
 
@@ -189,6 +193,11 @@ func (c *WebSocketClient) readLoop() {
 		if c.conn != nil {
 			c.conn.Close()
 		}
+
+		// 触发自动重连
+		if c.shouldReconnect {
+			go c.autoReconnect()
+		}
 	}()
 
 	for {
@@ -196,13 +205,13 @@ func (c *WebSocketClient) readLoop() {
 		if err != nil {
 			// 检查是否是连接关闭错误
 			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
-				log.Printf("⚠️ WebSocket 连接已正常关闭: %v", err)
+				log.Println("⚠️ WebSocket 连接已关闭，准备重连...")
 				return
 			}
 
 			// 检查是否是意外的连接关闭
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("⚠️ WebSocket 连接意外关闭: %v", err)
+				log.Println("⚠️ WebSocket 连接意外断开，准备重连...")
 				return
 			}
 
@@ -210,6 +219,11 @@ func (c *WebSocketClient) readLoop() {
 			log.Printf("⚠️ 读取消息时出现错误（继续运行）: %v", err)
 			continue
 		}
+
+		// 连接正常，重置重连计数
+		c.mu.Lock()
+		c.reconnectTry = 0
+		c.mu.Unlock()
 
 		log.Printf("📥 收到消息: %s", string(message))
 		c.handleMessage(message)
@@ -486,6 +500,68 @@ type WebSocketConfig struct {
 	DeviceCode string // 设备唯一标识码
 }
 
+// autoReconnect 自动重连机制
+// 按照 1分钟、3分钟、10分钟的间隔进行重试
+func (c *WebSocketClient) autoReconnect() {
+	c.mu.Lock()
+	currentTry := c.reconnectTry
+	c.mu.Unlock()
+
+	// 定义重连间隔：1分钟、3分钟、10分钟
+	reconnectIntervals := []time.Duration{
+		1 * time.Minute,  // 第一次重连：1分钟后
+		3 * time.Minute,  // 第二次重连：3分钟后
+		10 * time.Minute, // 第三次重连：10分钟后
+	}
+
+	// 如果已经尝试了3次，不再重连
+	if currentTry >= len(reconnectIntervals) {
+		log.Println("⚠️ 已达到最大重连次数，停止重连")
+		return
+	}
+
+	// 获取当前重连间隔
+	interval := reconnectIntervals[currentTry]
+	log.Printf("🔄 将在 %v 后尝试第 %d 次重连...", interval, currentTry+1)
+
+	// 等待指定时间
+	time.Sleep(interval)
+
+	// 尝试重连
+	log.Printf("🔄 开始第 %d 次重连尝试...", currentTry+1)
+
+	err := c.Connect()
+	if err != nil {
+		log.Printf("❌ 第 %d 次重连失败: %v", currentTry+1, err)
+
+		// 增加重连计数
+		c.mu.Lock()
+		c.reconnectTry++
+		c.mu.Unlock()
+
+		// 继续下一次重连
+		go c.autoReconnect()
+	} else {
+		log.Printf("✅ 第 %d 次重连成功！", currentTry+1)
+
+		// 重连成功，重置计数
+		c.mu.Lock()
+		c.reconnectTry = 0
+		c.mu.Unlock()
+
+		// 重新启动心跳
+		go c.StartHeartbeat()
+	}
+}
+
+// StopReconnect 停止自动重连
+func (c *WebSocketClient) StopReconnect() {
+	c.mu.Lock()
+	c.shouldReconnect = false
+	c.mu.Unlock()
+	log.Println("⚠️ 已停止自动重连")
+}
+
 // StartWebSocketClient 启动 WebSocket 客户端（封装函数）
 func StartWebSocketClient(config WebSocketConfig) (*WebSocketClient, error) {
 	// 验证配置参数
@@ -505,14 +581,56 @@ func StartWebSocketClient(config WebSocketConfig) (*WebSocketClient, error) {
 	// 创建客户端
 	client := NewWebSocketClient(config.ServerURL, config.DeviceCode)
 
-	// 连接到服务器
-	if err := client.Connect(); err != nil {
-		return nil, fmt.Errorf("连接服务器失败: %v", err)
+	// 连接到服务器（带重试机制）
+	err := client.connectWithRetry()
+	if err != nil {
+		log.Printf("⚠️ 初始连接失败，将在后台继续尝试重连")
+		// 不返回错误，而是在后台继续尝试重连
+		go client.autoReconnect()
+	} else {
+		// 启动心跳（在单独的 goroutine 中）
+		go client.StartHeartbeat()
+		log.Println("✅ WebSocket 客户端启动成功")
 	}
 
-	// 启动心跳（在单独的 goroutine 中）
-	go client.StartHeartbeat()
-
-	log.Println("✅ WebSocket 客户端启动成功")
 	return client, nil
+}
+
+// connectWithRetry 带重试机制的连接（用于启动时）
+func (c *WebSocketClient) connectWithRetry() error {
+	// 定义重连间隔：立即、1分钟、3分钟、10分钟
+	reconnectIntervals := []time.Duration{
+		0,                // 第一次：立即尝试
+		1 * time.Minute,  // 第二次：1分钟后
+		3 * time.Minute,  // 第三次：3分钟后
+		10 * time.Minute, // 第四次：10分钟后
+	}
+
+	var lastErr error
+	for i := 0; i < len(reconnectIntervals); i++ {
+		if i > 0 {
+			interval := reconnectIntervals[i]
+			log.Printf("🔄 将在 %v 后尝试第 %d 次连接...", interval, i+1)
+			time.Sleep(interval)
+			log.Printf("🔄 开始第 %d 次连接尝试...", i+1)
+		}
+
+		err := c.Connect()
+		if err == nil {
+			if i > 0 {
+				log.Printf("✅ 第 %d 次连接成功！", i+1)
+			}
+			// 连接成功，重置重连计数
+			c.mu.Lock()
+			c.reconnectTry = 0
+			c.mu.Unlock()
+			return nil
+		}
+
+		lastErr = err
+		log.Printf("❌ 第 %d 次连接失败: %v", i+1, err)
+	}
+
+	// 所有尝试都失败
+	return fmt.Errorf("连接失败，已尝试 %d 次: %v", len(reconnectIntervals), lastErr)
 }

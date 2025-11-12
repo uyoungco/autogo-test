@@ -1,6 +1,7 @@
 package core
 
 import (
+	"app/util"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -20,6 +21,7 @@ type WebSocketClient struct {
 	conn       *websocket.Conn // WebSocket 连接实例
 	connected  bool            // 连接状态标志，true 表示已连接
 	mu         sync.RWMutex    // 读写锁
+	r2Client   *util.R2Client
 }
 
 // DeviceAuthRequest 设备认证请求
@@ -56,6 +58,12 @@ type ScreenshotDataResponse struct {
 	Message string `json:"message"` // 处理结果消息
 }
 
+// ScreenshotURLRequest 截图 URL 请求
+type ScreenshotURLRequest struct {
+	ScreenshotURL string `json:"screenshotUrl"` // 截图的 R2 存储 URL
+	Timestamp     int64  `json:"timestamp"`     // 截图时间戳（毫秒）
+}
+
 // ScreenshotCommand 截图指令
 type ScreenshotCommand struct {
 	Timestamp int64 `json:"timestamp"` // 服务器发送指令的时间戳（毫秒）
@@ -70,7 +78,21 @@ type ErrorRequest struct {
 
 // NewWebSocketClient 创建新的 WebSocket 客户端
 func NewWebSocketClient(serverURL, deviceCode string) *WebSocketClient {
+
+	// 1. 创建 R2 客户端
+	client, err := util.NewR2Client(util.R2Config{
+		AccountID:       "227d58ddf76b97d47968d3443e1aa726",
+		AccessKeyID:     "c656346d615b67abcb3f73fc6365bf17",
+		AccessKeySecret: "4a3eedb529b778583d6d2ea13b7fc214a858775985891e3012ca3f6fcba95a55",
+		BucketName:      "haval-coin",
+		PublicDomain:    "https://haval-coin-img.uyoung.co", // R2 公开访问域名
+	})
+	if err != nil {
+		log.Fatalf("创建 R2 客户端失败: %v", err)
+	}
+
 	return &WebSocketClient{
+		r2Client:   client,
 		serverURL:  serverURL,
 		deviceCode: deviceCode,
 		connected:  false,
@@ -116,6 +138,9 @@ func (c *WebSocketClient) Connect() error {
 		log.Printf("❌ WebSocket 连接失败: %v", err)
 		return fmt.Errorf("WebSocket 连接失败: %v", err)
 	}
+
+	// 设置最大消息大小为 100MB，以支持大型截图数据的接收
+	conn.SetReadLimit(100 * 1024 * 1024) // 100MB
 
 	c.conn = conn
 	c.connected = true
@@ -169,8 +194,21 @@ func (c *WebSocketClient) readLoop() {
 	for {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
-			log.Printf("❌ 读取消息失败: %v", err)
-			return
+			// 检查是否是连接关闭错误
+			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+				log.Printf("⚠️ WebSocket 连接已正常关闭: %v", err)
+				return
+			}
+
+			// 检查是否是意外的连接关闭
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("⚠️ WebSocket 连接意外关闭: %v", err)
+				return
+			}
+
+			// 其他错误只记录日志，继续接收
+			log.Printf("⚠️ 读取消息时出现错误（继续运行）: %v", err)
+			continue
 		}
 
 		log.Printf("📥 收到消息: %s", string(message))
@@ -362,21 +400,35 @@ func (c *WebSocketClient) handleScreenshotCommandData(data []byte) {
 	go c.takeScreenshot()
 }
 
-// takeScreenshot 执行截图并上传
+// takeScreenshot 执行截图并上传到 R2
 func (c *WebSocketClient) takeScreenshot() {
 	log.Println("📸 开始执行截图...")
 
+	// 1. 截取屏幕
 	screenshot := images.CaptureScreen(0, 0, 0, 0, 0)
-	screenshotBase64 := images.EncodeToBase64(screenshot, "png", 50)
-	// 使用模拟截图数据
-	// screenshotBase64 := "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+	if screenshot == nil {
+		log.Println("❌ 截图失败：截图数据为空")
+		c.sendError("截图失败", "截图数据为空")
+		return
+	}
 
-	// 上传截图数据
-	if err := c.sendScreenshotData(screenshotBase64); err != nil {
-		log.Printf("❌ 上传截图失败: %v", err)
-		c.sendError("截图上传失败", err.Error())
+	// 2. 上传截图到 R2（使用 JPEG 格式，质量 70）
+	log.Println("📤 正在上传截图到 R2...")
+	imageURL, err := c.r2Client.UploadImageWithTimestamp("screenshots/", "screen.jpg", screenshot, "jpeg", 70)
+	if err != nil {
+		log.Printf("❌ 上传截图到 R2 失败: %v", err)
+		c.sendError("上传截图失败", err.Error())
+		return
+	}
+
+	log.Printf("✅ 截图上传成功，URL: %s", imageURL)
+
+	// 3. 发送图片 URL 给 WebSocket 服务器
+	if err := c.sendScreenshotData(imageURL); err != nil {
+		log.Printf("❌ 发送截图 URL 失败: %v", err)
+		c.sendError("发送截图 URL 失败", err.Error())
 	} else {
-		log.Println("✅ 截图上传成功")
+		log.Println("✅ 截图 URL 已发送到服务器")
 	}
 }
 
@@ -386,8 +438,6 @@ func (c *WebSocketClient) sendScreenshotData(screenshotBase64 string) error {
 		ScreenshotBase64: screenshotBase64,
 		Timestamp:        time.Now().UnixMilli(),
 	}
-
-	log.Printf("📤 发送截图数据 (长度: %d)", len(screenshotBase64))
 
 	// 发送截图数据
 	err := c.Emit("screenshot_data", request)

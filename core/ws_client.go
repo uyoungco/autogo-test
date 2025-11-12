@@ -428,7 +428,9 @@ func (c *WebSocketClient) takeScreenshot() {
 
 	// 2. 上传截图到 R2（使用 JPEG 格式，质量 70）
 	log.Println("📤 正在上传截图到 R2...")
-	imageURL, err := c.r2Client.UploadImageWithTimestamp("screenshots/", "screen.jpg", screenshot, "jpeg", 70)
+	// 文件名格式：设备编号_screen.jpg（时间戳会自动添加）
+	filename := fmt.Sprintf("%s_screen.jpg", c.deviceCode)
+	imageURL, err := c.r2Client.UploadImageWithTimestamp("screenshots/", filename, screenshot, "jpeg", 70)
 	if err != nil {
 		log.Printf("❌ 上传截图到 R2 失败: %v", err)
 		c.sendError("上传截图失败", err.Error())

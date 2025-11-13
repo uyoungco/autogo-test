@@ -55,6 +55,7 @@ require (
 	github.com/ugorji/go/codec v1.3.0 // indirect
 	github.com/zhouhui8915/engine.io-go v0.0.0-20150910083302-02ea08f0971f // indirect
 	go.uber.org/mock v0.5.0 // indirect
+	gocv.io/x/gocv v0.42.0 // indirect
 	golang.org/x/arch v0.20.0 // indirect
 	golang.org/x/crypto v0.40.0 // indirect
 	golang.org/x/mod v0.25.0 // indirect

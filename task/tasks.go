@@ -10,11 +10,13 @@ import (
 	"time"
 
 	"github.com/Dasongzi1366/AutoGo/storages"
+	"github.com/Dasongzi1366/AutoGo/utils"
 )
 
 // 全局变量存储账号ID
 var 账号id string
 var 游戏昵称 string
+var 等级 int = 0
 
 // 初始化函数，自动注册所有任务
 func init() {
@@ -258,6 +260,12 @@ func 获取用户id() error {
 		账号id = gnameUserID[0]
 	}
 
+	gameLevel := core.OCR.DetectAllText(219, 416, 286, 455)
+	if len(gameLevel) != 0 {
+		fmt.Print("获取用户等级: ", gameLevel, "\n")
+		等级 = utils.S2i(gameLevel[0])
+	}
+
 	if len(游戏昵称) == 0 || len(账号id) == 0 {
 		fmt.Print(游戏昵称, 账号id)
 		return errors.New("游戏昵称或账号id获取失败")
@@ -296,7 +304,7 @@ func 获取仓库物品价值() (string, error) {
 }
 
 // HTTP数据发送函数
-func 发送数据(userID string, gameName string, warehouseValue string) error {
+func 发送数据(userID string, gameName string, warehouseValue string, level int) error {
 	// 设备编号
 	windowId := storages.Get("data", "windowId")
 	data := map[string]interface{}{
@@ -304,6 +312,7 @@ func 发送数据(userID string, gameName string, warehouseValue string) error {
 		"accountId":       userID,
 		"gameName":        gameName,
 		"havalCoinAmount": warehouseValue,
+		"level":           level,
 	}
 
 	_, _, err := util.HttpRequest.PostJSON(
@@ -350,7 +359,7 @@ func 数据收集发送() error {
 		core.RandomClickInArea(16, 20, 45, 44)
 
 		// 发送HTTP请求
-		return 发送数据(账号id, 游戏昵称, warehouseValue)
+		return 发送数据(账号id, 游戏昵称, warehouseValue, 等级)
 	} else {
 		// 账号ID已存在，直接获取仓库物品价值
 		warehouseValue, err := 获取仓库物品价值()
@@ -359,6 +368,6 @@ func 数据收集发送() error {
 		}
 
 		// 发送HTTP请求
-		return 发送数据(账号id, 游戏昵称, warehouseValue)
+		return 发送数据(账号id, "", warehouseValue, 0)
 	}
 }

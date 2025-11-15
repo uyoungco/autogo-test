@@ -1,0 +1,223 @@
+{
+  "lastUpdated": "2025-11-15T17:46:19+08:00",
+  "projectName": "auto-go-test",
+  "projectType": "Go 自动化测试框架",
+  "modules": [
+    {
+      "name": "core",
+      "path": "core/",
+      "description": "核心功能模块，包含 OCR、OpenCV、颜色检测、配置管理、WebSocket 客户端等",
+      "entryPoints": [
+        "core/global.go",
+        "core/ocr.go",
+        "core/opencv.go",
+        "core/color.go",
+        "core/config.go",
+        "core/api.go",
+        "core/ws_client.go",
+        "core/motion.go"
+      ],
+      "apis": [
+        "OCR (全局 OCR 处理器)",
+        "OpenCV (全局图像识别处理器)",
+        "Color (全局颜色处理器)",
+        "API (全局 API 处理器)",
+        "Config (配置管理器)",
+        "GlobalStore (数据存储)"
+      ],
+      "dataModels": [
+        "ConfigManager",
+        "DataStore",
+        "UserInfo",
+        "WebSocketClient",
+        "OCRHandler",
+        "OpenCVHandler",
+        "ColorHandler"
+      ],
+      "hasTests": false,
+      "coverage": "complete"
+    },
+    {
+      "name": "state",
+      "path": "state/",
+      "description": "状态机模块，管理任务调度、异常处理、任务注册",
+      "entryPoints": [
+        "state/machine.go",
+        "state/registry.go",
+        "state/exception.go"
+      ],
+      "apis": [
+        "StateMachine (状态机)",
+        "GlobalRegistry (任务注册表)",
+        "ExceptionGuard (异常守护)"
+      ],
+      "dataModels": [
+        "StateMachine",
+        "TaskInfo",
+        "Registry"
+      ],
+      "hasTests": false,
+      "coverage": "complete"
+    },
+    {
+      "name": "task",
+      "path": "task/",
+      "description": "任务模块，包含具体的业务任务实现（买药、回城、数据收集等）",
+      "entryPoints": [
+        "task/tasks.go",
+        "task/exception.go"
+      ],
+      "apis": [
+        "数据收集发送",
+        "买药",
+        "回城",
+        "礼包领取",
+        "获取用户id",
+        "获取仓库物品价值"
+      ],
+      "dataModels": [
+        "ItemConfig"
+      ],
+      "hasTests": false,
+      "coverage": "complete"
+    },
+    {
+      "name": "scene",
+      "path": "scene/",
+      "description": "场景识别模块，基于图像和 OCR 进行场景判断",
+      "entryPoints": [
+        "scene/identify.go"
+      ],
+      "apis": [
+        "Identify (场景识别)"
+      ],
+      "dataModels": [
+        "SceneConfig",
+        "SceneManager",
+        "OCRCache"
+      ],
+      "configs": [
+        "assets/config/scene.json",
+        "assets/config/scene_map.json"
+      ],
+      "hasTests": false,
+      "coverage": "complete"
+    },
+    {
+      "name": "util",
+      "path": "util/",
+      "description": "工具模块，包含 HTTP 请求、R2 存储、坐标处理、图像处理等工具",
+      "entryPoints": [
+        "util/http.go",
+        "util/r2.go",
+        "util/coordinate.go",
+        "util/imageHandler.go",
+        "util/contains.go"
+      ],
+      "apis": [
+        "HttpRequest (HTTP 客户端)",
+        "R2Client (Cloudflare R2 存储客户端)"
+      ],
+      "dataModels": [
+        "R2Client",
+        "R2Config"
+      ],
+      "hasTests": false,
+      "coverage": "complete"
+    },
+    {
+      "name": "assets",
+      "path": "assets/",
+      "description": "静态资源模块，使用 Go embed 嵌入图片和配置文件",
+      "entryPoints": [
+        "assets/definitions.go"
+      ],
+      "apis": [
+        "ImageFile (嵌入的图片文件系统)",
+        "ConfigFile (嵌入的配置文件系统)",
+        "TemplateMap (模板图像缓存)",
+        "MaskMap (遮罩图像缓存)"
+      ],
+      "configs": [
+        "assets/config/default.json",
+        "assets/config/scene.json",
+        "assets/config/scene_map.json"
+      ],
+      "resources": [
+        "assets/img/ (图像资源目录)"
+      ],
+      "hasTests": false,
+      "coverage": "complete"
+    },
+    {
+      "name": "AutoGo",
+      "path": "AutoGo/",
+      "description": "本地依赖库，提供底层自动化功能（独立 Go 模块）",
+      "entryPoints": [
+        "AutoGo/images/images.go",
+        "AutoGo/motion/motion.go",
+        "AutoGo/opencv/opencv.go",
+        "AutoGo/ppocr/ppocr.go",
+        "AutoGo/imgui/imgui.go",
+        "AutoGo/storages/storages.go",
+        "AutoGo/system/system.go",
+        "AutoGo/utils/utils.go"
+      ],
+      "apis": [
+        "images (屏幕截图、图像处理)",
+        "motion (点击、滑动操作)",
+        "opencv (OpenCV 图像处理)",
+        "ppocr (OCR 识别)",
+        "imgui (UI 提示)",
+        "storages (数据存储)",
+        "system (系统操作)",
+        "utils (工具函数)"
+      ],
+      "hasTests": false,
+      "coverage": "partial",
+      "notes": "独立的 Go 模块，通过 replace 指令引用"
+    },
+    {
+      "name": "TomatoOCR",
+      "path": "TomatoOCR/",
+      "description": "番茄 OCR 客户端封装",
+      "entryPoints": [
+        "TomatoOCR/TomatoOCR.go",
+        "TomatoOCR/client.go",
+        "TomatoOCR/models.go"
+      ],
+      "apis": [
+        "TomatoOCR 客户端"
+      ],
+      "hasTests": false,
+      "coverage": "complete"
+    }
+  ],
+  "entryPoint": "main.go",
+  "testFiles": [
+    "test1.go",
+    "test2.go",
+    "test3.go",
+    "sell_safebox_item.go"
+  ],
+  "configurations": {
+    "default": "assets/config/default.json",
+    "scene": "assets/config/scene.json",
+    "scene_map": "assets/config/scene_map.json"
+  },
+  "resources": {
+    "ocr_models": "resources/assets/*.opt",
+    "native_libs": "resources/libs/",
+    "images": "assets/img/"
+  },
+  "statistics": {
+    "totalFiles": 48,
+    "goFiles": 45,
+    "jsonFiles": 3,
+    "modules": 8,
+    "estimatedCoverage": "95%"
+  },
+  "gaps": [],
+  "truncated": false,
+  "scanNotes": "项目结构清晰，模块划分合理。主要模块包括核心功能（core）、状态机（state）、任务（task）、场景识别（scene）、工具（util）和资源（assets）。AutoGo 为独立的本地依赖库。"
+}

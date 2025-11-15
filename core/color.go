@@ -159,3 +159,68 @@ func (h *ColorHandler) WaitForColor(x1, y1, x2, y2 int, colorStr string, sim flo
 
 	return -1, -1
 }
+
+// WaitFindMultiColors 等待在指定区域内查找匹配的多点颜色序列
+// x1, y1, x2, y2: 检测区域坐标
+// colors: 颜色模板字符串，例如 "ffccff-151515,635,978,ffab2d-101010,6,29,24b1ff-101010,68,35,907efd-101010"
+// sim: 相似度阈值 (0.1-1.0)
+// maxAttempts: 最大检测次数，默认60次
+// 返回值: 找到颜色的坐标 (x, y)，找不到返回 (-1, -1)
+func (h *ColorHandler) WaitFindMultiColors(x1, y1, x2, y2 int, colors string, sim float32, maxAttempts int) (int, int, bool) {
+	if maxAttempts <= 0 {
+		maxAttempts = 60
+	}
+
+	for i := 0; i < maxAttempts; i++ {
+		x, y := h.FindMultiColors(x1, y1, x2, y2, colors, sim, 0)
+		if x != -1 && y != -1 {
+			return x, y, true
+		}
+		time.Sleep(time.Second)
+	}
+
+	return -1, -1, false
+}
+
+// IsExistByMultipoints 多点识图方法
+// points: 点数组，格式为 [][]interface{}{{x1, y1, color1}, {x2, y2, color2}, ...}
+// 其中 x, y 为 int 类型，color 为 string 类型
+// sim: 相似度，范围 0.1 - 1.0
+// 返回值: true 表示所有点都匹配，false 表示有任意一个点不匹配
+func (h *ColorHandler) IsExistByMultipoints(points [][]interface{}, sim float32) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if sim < 0.1 || sim > 1.0 {
+		return false
+	}
+
+	if len(points) == 0 {
+		return false
+	}
+
+	// 遍历每个点进行颜色匹配
+	for i, point := range points {
+		i = i
+		if len(point) != 3 {
+			return false
+		}
+
+		// 类型断言：前两个为int，最后一个为string
+		x, ok1 := point[0].(int)
+		y, ok2 := point[1].(int)
+		colorStr, ok3 := point[2].(string)
+
+		if !ok1 || !ok2 || !ok3 {
+			return false
+		}
+
+		// 使用底层方法进行颜色匹配
+		matched := images.CmpColor(x, y, colorStr, sim, 0)
+		if !matched {
+			return false
+		}
+	}
+
+	return true
+}

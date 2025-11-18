@@ -117,3 +117,8 @@ func CloseAllWindows() {
 	}
 
 }
+
+// ClickBlock 点击后退按钮
+func ClickBlock() {
+	RandomClickInArea(15, 17, 41, 46)
+}

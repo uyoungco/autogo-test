@@ -66,6 +66,56 @@ func CalculateOccupiedCells(x, y, w, h int, cellSize int) int {
 	return 0
 }
 
+// DeduplicateItems 根据中心点坐标去重物品列表
+// 参数：
+//   - items: 待去重的物品列表
+//   - threshold: 中心点距离阈值（默认 10 像素）
+//
+// 返回：
+//   - 去重后的物品列表
+//
+// 算法：
+//   - 遍历物品列表，如果两个物品的中心点 X 和 Y 坐标差值都在阈值内，则认为是重复
+//   - 保留第一个出现的物品，丢弃后续重复的物品
+func DeduplicateItems(items []InventoryItem, threshold int) []InventoryItem {
+	if len(items) == 0 {
+		return items
+	}
+
+	result := make([]InventoryItem, 0, len(items))
+
+	for _, item := range items {
+		isDuplicate := false
+
+		// 检查当前物品是否与已添加的物品重复
+		for _, existing := range result {
+			deltaX := item.CenterX - existing.CenterX
+			deltaY := item.CenterY - existing.CenterY
+
+			// 计算绝对值
+			if deltaX < 0 {
+				deltaX = -deltaX
+			}
+			if deltaY < 0 {
+				deltaY = -deltaY
+			}
+
+			// 如果 X 和 Y 坐标差值都在阈值内，认为是重复
+			if deltaX <= threshold && deltaY <= threshold {
+				isDuplicate = true
+				break
+			}
+		}
+
+		// 如果不是重复项，添加到结果列表
+		if !isDuplicate {
+			result = append(result, item)
+		}
+	}
+
+	return result
+}
+
 // FindByColor 按 HSV 范围筛选轮廓并返回符合条件的 InventoryItem
 // 参数：
 //   - img: 输入图像（*image.NRGBA）
@@ -74,7 +124,7 @@ func CalculateOccupiedCells(x, y, w, h int, cellSize int) int {
 //   - cellSize: 单元格大小（用于计算占用格数）
 //
 // 返回：
-//   - 检测到的仓库物品列表
+//   - 检测到的仓库物品列表（已去重）
 //   - error: 错误信息（当前实现始终返回 nil）
 func FindByColor(img *image.NRGBA, colorRanges []ColorRange, minSize, cellSize int) ([]InventoryItem, error) {
 	Matimg := ImageToMat(img)
@@ -130,6 +180,9 @@ func FindByColor(img *image.NRGBA, colorRanges []ColorRange, minSize, cellSize i
 		// 释放掩膜资源
 		mask.Close()
 	}
+
+	// 根据中心点坐标去重（阈值 10 像素）
+	out = DeduplicateItems(out, 10)
 
 	return out, nil
 }

@@ -22,6 +22,14 @@ var defaultColorRanges = []util.ColorRange{
 		Color: "yellow",
 	},
 	{
+		Name: "黄色",
+		HSV: util.HSVRange{
+			LowerH: 11, LowerS: 45, LowerV: 50,
+			UpperH: 15, UpperS: 90, UpperV: 81,
+		},
+		Color: "yellow",
+	},
+	{
 		Name: "绿色",
 		HSV: util.HSVRange{
 			LowerH: 83, LowerS: 52, LowerV: 49,
@@ -56,29 +64,23 @@ func main() {
 			// 点击仓库
 			// core.RandomClickInArea(23, 647, 133, 682)
 			core.Click(74, 665)
-			break
+			core.Sleep(2000)
 		}
 		if sceneName == "界面仓库" {
 			break
 		}
-		core.Sleep(5000)
+		//core.Sleep(2000)
 	}
 	// 随机延迟
-	core.RandomSleep(2000, 3000)
-	var flag = core.Color.CmpColor(52, 426, "FFFFFF", 0.98)
-	if !flag {
-		// 点击仓库
-		// core.RandomClickInArea(23, 647, 133, 682)
-		// 检测到保险箱图标后获取位置
-		_, _, isSafeboxIcon := core.OpenCV.WaitFor(18, 374, 75, 464, "img/仓库_保险箱图标.png", true, 1, 0.8, 2*time.Second, 10, "检测到保险箱图标后获取位置")
-		if !isSafeboxIcon {
-			// errors.New('未查询到安全箱图标')
-			println("未查询到安全箱图标")
-			return
-		}
+	// core.RandomSleep(2000, 3000)
+	matched := images.CmpColor(45, 427, "9EA2A7-101010|A3A3A8-101010|9FA1A5-101010", 0.9, 0)
+
+	// var x1, y1 = core.Color.WaitForColor(32, 413, 58, 430, "9DA4A9|A3A3A8|9CA1A5", 0.9, 10)
+	println("判断左侧图标是否被点击", matched)
+	if matched {
 		// 点击保险箱图标
-		core.RandomClickInArea(18, 374, 75, 464)
-		core.Sleep(1000)
+		core.Click(43, 421)
+		core.Sleep(500)
 	}
 
 	// 计算安全箱范围
@@ -86,7 +88,11 @@ func main() {
 	// y1需要计算: 通过安全箱问号图标获取y值 y1 = y1 - 37
 	// x2, y2 400 639
 	// opencv检测安全箱物品
-	_, y1 := core.OpenCV.FindImage(83, 212, 332, 644, "img/仓库_安全箱_问号.png", true, 1, 0.8)
+	_, y1, 检查图标 := core.OpenCV.WaitFor(83, 212, 332, 644, "img/仓库_安全箱_问号.png", true, 1, 0.8, 2*time.Second, 10, "仓库_物品出售图标")
+	if !检查图标 {
+		println("检测到仓库_安全箱_问号")
+		return
+	}
 	y1 = y1 + 37
 	var rect = util.Rect{X1: 189, Y1: y1, X2: 400, Y2: 639}
 	img := images.CaptureScreen(rect.X1, rect.Y1, rect.X2, rect.Y2, 0)
@@ -96,6 +102,10 @@ func main() {
 	boxes, err := util.FindByColor(img, defaultColorRanges, 65, 68)
 	if err != nil {
 		log.Fatalf("查找失败: %v", err)
+	}
+	if len(boxes) == 0 {
+		println("未找到仓库物品")
+		return
 	}
 
 	vis, err := util.VisualizeResults(img, boxes)
@@ -119,19 +129,18 @@ func main() {
 	for _, it := range boxes {
 		fmt.Println(it)
 	}
+
 	// 循环出售物品
-	for idx, it := range boxes {
+	for idx, _ := range boxes {
 		item := boxes[idx]
 		// 点击物品
 		core.Click(item.CenterX, item.CenterY)
 		core.Sleep(1000)
 		// 检查出售按钮
-		// x1, y1 := core.OpenCV.FindImage(0, 0, 0, 0, "img/仓库_物品出售图标.png", true, 1, 0.8)
-		// x1, y1, 出售按钮 := core.OpenCV.WaitFor(0, 0, 0, 0, "img/仓库_物品出售.png", true, 1, 0.8, 2*time.Second, 10, "仓库_物品出售图标")
-		var colors1 = "bec0c0-101010,1,8,bec0c0-101010,-6,7,bbbdbe-101010,7,7,b0b3b4-101010,-25,-2,aeb1b2-101010,-25,3,aeb1b2-101010,13,-4,bcbebf-101010,13,1,b6b8b9-101010,19,-1,bec0c0-101010,19,8,979a9b-101010"
-		x1, y1, 出售按钮 := core.Color.WaitFindMultiColors(0, 0, 0, 0, colors1, 0.9, 10)
+		x1, y1, 出售按钮 := core.OpenCV.WaitFor(76, 71, 1206, 649, "img/仓库_出售文本.png", true, 1, 0.7, 2*time.Second, 10, "仓库_出售文本")
+		println("出售按钮", x1, y1)
 		if !出售按钮 {
-			println("未找到出售按钮")
+			println("未找到出售按钮", x1, y1)
 			return
 		}
 		core.Click(x1, y1)
@@ -146,30 +155,31 @@ func main() {
 		// 为真表示不能上架
 		var 是否可以上架 = core.Color.CmpColor(1092, 533, "626769", 0.9)
 		if 是否可以上架 {
+			println("不能上架直接出售")
 			// 点击出售跳出循环
 			core.Click(1083, 294)
 			core.Sleep(1000)
-			// continue
-			return
+			continue
+			// return
 		}
 		// ocr获取系统价格和交易行价格
 		// 系统
 		systemPriceOcr := core.OCR.DetectAllText(992, 214, 1168, 245)
-		println("systemPriceOcr", systemPriceOcr, "\n")
 		systemPriceInt, _ := util.StringToIntMap(systemPriceOcr[0])
-		println("systemPriceInt", systemPriceInt, "\n")
+		println("systemPriceInt", systemPriceInt)
 
 		// 交易行
 		marketPriceOcr := core.OCR.DetectAllText(980, 444, 1171, 480)
-		println("marketPriceOcr", marketPriceOcr, "\n")
 		marketPriceInt, _ := util.StringToIntMap(marketPriceOcr[0])
-		println("marketPriceInt", marketPriceInt, "\n")
+		println("marketPriceInt", marketPriceInt)
+		println("差值", marketPriceInt-systemPriceInt)
 		if (marketPriceInt - systemPriceInt) < 4000 {
+			println("小于4000直接出售")
 			// 小于4000直接出售
 			core.Click(1083, 294)
 			core.Sleep(1000)
-			// continue
-			return
+			continue
+			// return
 		}
 		// 点击上架打开交易行窗口
 		core.Click(1084, 529)
@@ -184,9 +194,9 @@ func main() {
 		core.Sleep(500)
 		core.Click(991, 577)
 		core.Sleep(1000)
-
-		fmt.Println(it)
-		return
+		println("正常出售完成")
+		//fmt.Println(it)
+		//return
 	}
 
 }

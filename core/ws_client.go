@@ -14,6 +14,12 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// WebSocket 心跳超时配置
+const (
+	pongWait   = 60 * time.Second // 等待 pong 消息的超时时间
+	pingPeriod = 30 * time.Second // 发送 ping 消息的间隔（必须小于 pongWait）
+)
+
 // WebSocketClient WebSocket 客户端结构体
 type WebSocketClient struct {
 	serverURL       string          // 服务器地址，如 http://localhost:3000
@@ -22,8 +28,10 @@ type WebSocketClient struct {
 	connected       bool            // 连接状态标志，true 表示已连接
 	mu              sync.RWMutex    // 读写锁
 	r2Client        *util.R2Client
-	reconnectTry    int  // 当前重连尝试次数（0, 1, 2）
-	shouldReconnect bool // 是否应该重连
+	reconnectTry    int           // 当前重连尝试次数（0, 1, 2）
+	shouldReconnect bool          // 是否应该重连
+	done            chan struct{} // 用于通知 goroutine 退出
+	pingTicker      *time.Ticker  // ping 定时器
 }
 
 // DeviceAuthRequest 设备认证请求
@@ -146,12 +154,24 @@ func (c *WebSocketClient) Connect() error {
 	// 设置最大消息大小为 100MB，以支持大型截图数据的接收
 	conn.SetReadLimit(100 * 1024 * 1024) // 100MB
 
+	// 初始化心跳相关资源
+	c.mu.Lock()
+	if c.pingTicker != nil {
+		c.pingTicker.Stop()
+	}
+	c.signalDone() // 关闭旧的 done channel
+	c.done = make(chan struct{})
+	c.pingTicker = time.NewTicker(pingPeriod)
 	c.conn = conn
 	c.connected = true
+	c.mu.Unlock()
+
 	log.Println("✅ WebSocket 连接建立成功")
 
 	// 启动消息接收循环
 	go c.readLoop()
+	// 启动 WebSocket ping 循环
+	go c.pingLoop()
 
 	// 等待接收服务器的握手消息
 	time.Sleep(500 * time.Millisecond)
@@ -185,8 +205,22 @@ func (c *WebSocketClient) Connect() error {
 // readLoop 读取消息循环
 func (c *WebSocketClient) readLoop() {
 	log.Println("📨 消息接收循环已启动")
+
+	// 设置读超时和 pong 处理器
+	c.mu.Lock()
+	if c.conn != nil {
+		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		// 仅设置 PongHandler，保持默认 PingHandler（自动回复 pong）
+		c.conn.SetPongHandler(func(string) error {
+			log.Println("💓 收到服务器 WebSocket pong，刷新读超时")
+			return c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		})
+	}
+	c.mu.Unlock()
+
 	defer func() {
 		log.Println("📨 消息接收循环已停止")
+		c.signalDone() // 通知其他 goroutine 退出
 		c.mu.Lock()
 		c.connected = false
 		c.mu.Unlock()
@@ -223,6 +257,13 @@ func (c *WebSocketClient) readLoop() {
 		// 连接正常，重置重连计数
 		c.mu.Lock()
 		c.reconnectTry = 0
+		c.mu.Unlock()
+
+		// 每次收到消息时刷新读超时
+		c.mu.Lock()
+		if c.conn != nil {
+			c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		}
 		c.mu.Unlock()
 
 		log.Printf("📥 收到消息: %s", string(message))
@@ -477,12 +518,73 @@ func (c *WebSocketClient) sendError(errorMsg, details string) {
 	}
 }
 
+// pingLoop 定期发送 WebSocket ping 帧
+func (c *WebSocketClient) pingLoop() {
+	c.mu.RLock()
+	ticker := c.pingTicker
+	c.mu.RUnlock()
+
+	if ticker == nil {
+		log.Println("⚠️ pingTicker 未初始化，pingLoop 退出")
+		return
+	}
+
+	defer func() {
+		log.Println("📡 WebSocket ping 循环已停止")
+	}()
+
+	log.Println("📡 WebSocket ping 循环已启动")
+	for {
+		select {
+		case <-c.done:
+			// 收到退出信号
+			return
+		case <-ticker.C:
+			// 定时发送 ping
+			c.mu.RLock()
+			conn := c.conn
+			connected := c.connected
+			c.mu.RUnlock()
+
+			if !connected || conn == nil {
+				log.Println("⚠️ 连接已断开，pingLoop 退出")
+				return
+			}
+
+			// 发送 WebSocket 层 ping 帧
+			c.mu.Lock()
+			err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(10*time.Second))
+			c.mu.Unlock()
+
+			if err != nil {
+				log.Printf("⚠️ 发送 WebSocket ping 失败: %v", err)
+				// ping 失败说明连接有问题，关闭连接触发重连
+				c.signalDone()
+				if conn != nil {
+					conn.Close()
+				}
+				return
+			}
+			log.Println("📡 WebSocket ping 已发送")
+		}
+	}
+}
+
 // Disconnect 断开连接
 func (c *WebSocketClient) Disconnect() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.connected = false
+
+	// 停止心跳定时器
+	c.signalDone()
+	if c.pingTicker != nil {
+		c.pingTicker.Stop()
+		c.pingTicker = nil
+	}
+
+	// 关闭连接
 	if c.conn != nil {
 		return c.conn.Close()
 	}
@@ -635,4 +737,19 @@ func (c *WebSocketClient) connectWithRetry() error {
 
 	// 所有尝试都失败
 	return fmt.Errorf("连接失败，已尝试 %d 次: %v", len(reconnectIntervals), lastErr)
+}
+
+// signalDone 安全地关闭 done channel，通知所有 goroutine 退出
+// 使用 select 避免重复关闭已关闭的 channel
+func (c *WebSocketClient) signalDone() {
+	if c.done == nil {
+		return
+	}
+	select {
+	case <-c.done:
+		// channel 已关闭，不做任何操作
+	default:
+		// channel 未关闭，关闭它
+		close(c.done)
+	}
 }
